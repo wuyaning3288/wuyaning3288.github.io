@@ -1,0 +1,133 @@
+---
+title: "code"
+author: "Yaning Wu"
+date: '2023-10-25'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,prompt = TRUE,comment = '',collapse = TRUE)
+```
+
+## Analysis for an imdb score dataset
+
+```{r echo=TRUE, results = TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+#ingest data
+movie_nb <- read.csv('D:/学习/大三上/统计学习/期末论文/movie_nb_1.csv')
+new_data <- na.omit(movie_nb)
+new_data[,"color"]=as.factor(new_data[,"color"])
+new_data[,"genres_1"]=as.factor(new_data[,"genres_1"])
+new_data[,"language"]=as.factor(new_data[,"language"])
+new_data[,"country"]=as.factor(new_data[,"country"])
+new_data[,"content_rating"]=as.factor(new_data[,"content_rating"])
+new_data[,"budget"]=log(as.numeric(new_data[,"budget"]))
+
+
+
+#Classified data visualization
+par(mfrow=c(2,2))
+ggplot(data = new_data,aes(y=language,fill=language))+geom_histogram(stat =
+                                                                       "count")
+ggplot(data = new_data,aes(y=genres_1,fill=genres_1))+geom_histogram(stat =
+                                                                       "count")
+ggplot(data = new_data,aes(y=content_rating,fill=content_rating))+geom_histogram(stat =
+                                                                                   "count")
+ggplot(data = new_data,aes(y=color,fill=color))+geom_histogram(stat = "count")
+#boxplot
+pg <- ggplot(new_data, aes(x=genres_1, y=gross)) + geom_boxplot()+scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9"))
+ggplot(new_data, aes(x=genres_1, y=gross,color = genres_1)) + geom_boxplot()+
+  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9","#BB4444", "#EE9988", "#FF99FF", "#77AADD", "#4477AA","#6977AA","#4337AA","#9697AA"))
+pc <- ggplot(new_data, aes(x=content_rating, y=gross,color=content_rating)) + 
+  geom_boxplot()+
+  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9","#BB4444", "#EE9988", "#FF99FF", "#77AADD", "#4477AA","#6977AA","#4337AA","#9697AA"))
+pl <- ggplot(new_data, aes(x=language, y=gross,color=language)) + 
+  geom_boxplot()+
+  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9","#BB4444", "#EE9988", "#FF99FF", "#77AADD", "#4477AA","#6977AA","#4337AA","#9697AA"))
+pr <- ggplot(new_data, aes(x=color, y=gross,color=color)) + 
+  geom_boxplot()+
+  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9","#BB4444", "#EE9988", "#FF99FF", "#77AADD", "#4477AA","#6977AA","#4337AA","#9697AA"))
+
+#corplot
+library(corrplot) 
+conti <- new_data %>% select(!c(color,genres_1,movie_title,language,country,content_rating))
+forcor <-cor(conti)
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(forcor, method = "shade", type = {"lower"}, shade.col = NA, 
+         tl.col = "black", tl.srt = 0, col = col(200), addCoef.col = "black", number.cex = 0.7,tl.cex = 0.7,
+         cl.pos = NULL, order = "AOE")
+
+library(car)
+#scatterplotMatrix(conti,lty.smooth=2,spread=FALSE,main='Scatter Plot Matrix')
+#regression model
+forreg <- new_data %>% select(!c(movie_title,country))
+glm_Model <- glm(log(gross)~.,data=forreg,family = "gaussian")
+summary(glm_Model)
+lm.fit=lm(gross~.,data=forreg)
+summary(lm.fit)
+par(mfrow=c(2,2))
+plot(lm.fit)
+lm.fit1=lm(log(gross)~log(budget),data=forreg)
+summary(lm.fit1)
+fitvif <- vif(lm.fit)
+library(leaps)
+regfit.full=regsubsets(gross~.,forreg,really.big= T,nvmax = 31)
+reg.summary = summary(regfit.full)
+reg.summary
+
+sub.rss <- coef(regfit.full,31)
+sub.cpadj <-coef(regfit.full,22)
+sub.bic <- coef(regfit.full,16)
+sub1 <- coef(regfit.full,21)
+
+par(mfrow=c(2,2))
+plot(reg.summary$rss,xlab = "number of variables",ylab = "rss"
+          ,type = "l")
+which.min(reg.summary$rss)
+plot(reg.summary$cp,xlab = "number of variables",ylab = "cp",type = "l")
+which.min(reg.summary$cp)
+plot(reg.summary$bic,xlab = "number of variables",ylab = "bic"
+     ,type = "l")
+which.min(reg.summary$bic)
+plot(reg.summary$adjr2,xlab = "number of variables",ylab = "adjr
+",type = "l")
+which.max(reg.summary$adjr2)
+reg.summary$bic
+par(mfrow =c(1,1))
+plot(regfit.full,scale = "adjr2")
+plot(regfit.full,scale = "r2")
+plot(regfit.full,scale = "Cp")
+plot(regfit.full,scale = "bic")
+library(glmnet)
+attach(forreg)
+forla =model.matrix(gross~.,forreg) 
+y = forreg$gross
+set.seed(2)
+grid=10^seq(10,-2,length=100)
+lasso.mod=glmnet(forla,y,alpha = 1,lambda=grid)
+plot(lasso.mod)
+cv.out=cv.glmnet(forla,y,alpha = 1)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+lasso.mod=glmnet(forla,y,alpha = 1,lambda=bestlam)
+lasso.coef <- coef(lasso.mod)
+lasso.coef <- as.matrix(lasso.coef)
+lasso.coef <- as.data.frame(lasso.coef)
+
+#随机树
+library(randomForest)
+train = sample(1:nrow(forreg),nrow(forreg)/2)
+set.seed(1)
+rf.movie <- randomForest(gross~.,data = forreg,subset = train,mtry = 8,importance = T)
+rf.movie
+yhat.rf <- predict(rf.movie,newdata = forreg[-train,])
+forreg.test <- forreg[-train,"gross"]
+mean.rf <- mean((yhat.rf-forreg.test)^2)
+im<- importance(rf.movie)
+varImpPlot(rf.movie)
+
+```
+
+
